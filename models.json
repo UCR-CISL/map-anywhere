@@ -1,0 +1,219 @@
+{
+  "title": "Map Anywhere \u2014 3DGS Model Browser",
+  "subtitle": "Interactive viewer for our trained Gaussian-splat reconstructions",
+  "data_base": "./models/",
+  "scenes": [
+    {
+      "id": "riverside",
+      "name": "Riverside \u2014 TC Intersection",
+      "location": "33.9757, -117.3399",
+      "blurb": "Google Street View pano reconstruction of the traffic-camera intersection. Multiple training recipes over the same COLMAP frame.",
+      "models": [
+        {
+          "id": "champion",
+          "label": "Champion (road + COLMAP)",
+          "tag": "flagship",
+          "file": "riverside_champion.sog",
+          "size_mb": 29.5,
+          "metrics": "bg PSNR 21.58 \u00b7 depth-NCC 0.90 \u00b7 2.4M splats",
+          "camera": {
+            "pos": [
+              33.909313,
+              -49.517248,
+              -0.025952
+            ],
+            "R": [
+              -0.99913958,
+              -0.03803566,
+              0.01653467,
+              -0.0164532,
+              -0.00245416,
+              -0.99986163,
+              0.03807097,
+              -0.99927337,
+              0.00182624
+            ],
+            "fy": 456.0,
+            "height": 512
+          }
+        },
+        {
+          "id": "champion_ft2025",
+          "label": "Champion + 2025 finetune",
+          "tag": "",
+          "file": "riverside_champion_ft2025.splat",
+          "size_mb": 76.9,
+          "metrics": "bg PSNR 23.64 \u00b7 depth-NCC 0.93 (same frame as champion)",
+          "camera": {
+            "pos": [
+              33.909313,
+              -49.517248,
+              -0.025952
+            ],
+            "R": [
+              -0.99913958,
+              -0.03803566,
+              0.01653467,
+              -0.0164532,
+              -0.00245416,
+              -0.99986163,
+              0.03807097,
+              -0.99927337,
+              0.00182624
+            ],
+            "fy": 456.0,
+            "height": 512
+          }
+        },
+        {
+          "id": "v2_full",
+          "label": "v2 full (all-year)",
+          "tag": "",
+          "file": "riverside_v2_full.splat",
+          "size_mb": 85.1,
+          "metrics": "full 2.4M \u00b7 GPS-scan frame",
+          "camera": {
+            "pos": [
+              -0.93853,
+              6.560274,
+              0.049549
+            ],
+            "R": [
+              -0.898136,
+              -0.439413,
+              -0.016387,
+              0.018608,
+              -0.000748,
+              -0.999827,
+              0.439325,
+              -0.898285,
+              0.008848
+            ],
+            "fy": 456.0,
+            "height": 512
+          }
+        },
+        {
+          "id": "winner_d",
+          "label": "winner-D (semantic-freespace)",
+          "tag": "",
+          "file": "riverside_winner_d.splat",
+          "size_mb": 85.3,
+          "metrics": "freespace-violation 0.056 (3-seed)",
+          "camera": {
+            "pos": [
+              -13.4229,
+              -21.0238,
+              -0.0358
+            ],
+            "R": [
+              0.192525,
+              -0.004973,
+              -0.981279,
+              0.980102,
+              -0.048264,
+              0.192539,
+              -0.048318,
+              -0.998822,
+              -0.004418
+            ],
+            "fy": 456.02,
+            "height": 512
+          }
+        }
+      ]
+    },
+    {
+      "id": "seattle",
+      "name": "Seattle \u2014 Dense Pano",
+      "location": "47.62, -122.35",
+      "blurb": "Dense Street View pano capture. Held-out test split; compare training recipes on the same aligned world frame.",
+      "models": [
+        {
+          "id": "freeze_ft",
+          "label": "Freeze + finetune",
+          "tag": "flagship",
+          "file": "seattle_freeze_ft.splat",
+          "size_mb": 79.1,
+          "metrics": "freeze-anchored finetune",
+          "camera": {
+            "pos": [
+              -29.5722,
+              13.1031,
+              -0.1626
+            ],
+            "R": [
+              0.73955,
+              -0.003521,
+              0.673092,
+              -0.673061,
+              -0.014867,
+              0.739438,
+              0.007403,
+              -0.999883,
+              -0.013364
+            ],
+            "fy": 456.0,
+            "height": 512
+          }
+        },
+        {
+          "id": "baseline",
+          "label": "Baseline (plain 3DGS)",
+          "tag": "",
+          "file": "seattle_baseline.splat",
+          "size_mb": 76.8,
+          "metrics": "canonical baseline",
+          "camera": {
+            "pos": [
+              -29.5722,
+              13.1031,
+              -0.1626
+            ],
+            "R": [
+              0.73955,
+              -0.003521,
+              0.673092,
+              -0.673061,
+              -0.014867,
+              0.739438,
+              0.007403,
+              -0.999883,
+              -0.013364
+            ],
+            "fy": 456.0,
+            "height": 512
+          }
+        },
+        {
+          "id": "v4",
+          "label": "v4 (semantic-freespace decay)",
+          "tag": "",
+          "file": "seattle_v4.splat",
+          "size_mb": 74.4,
+          "metrics": "semfs violation 0.130 -> 0.056",
+          "camera": {
+            "pos": [
+              -29.5722,
+              13.1031,
+              -0.1626
+            ],
+            "R": [
+              0.73955,
+              -0.003521,
+              0.673092,
+              -0.673061,
+              -0.014867,
+              0.739438,
+              0.007403,
+              -0.999883,
+              -0.013364
+            ],
+            "fy": 456.0,
+            "height": 512
+          }
+        }
+      ]
+    }
+  ]
+}

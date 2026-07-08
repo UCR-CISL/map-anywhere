@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>3DGS compare</title>
+  <style>
+    :root { --accent: #ff8c2e; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #eee; }
+    #app { position: fixed; inset: 0; touch-action: none; }
+    #app canvas { display: block; }
+    .side-label { position: fixed; top: 12px; z-index: 10; max-width: 44vw;
+      background: rgba(8,10,14,.62); padding: 7px 11px; border-radius: 9px; font-size: 12px;
+      line-height: 1.45; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,.08); }
+    .side-label b { color: #fff; font-size: 13px; }
+    .side-label .m { color: #9fb0c7; }
+    #labL { left: 12px; }
+    #labR { left: calc(50vw + 12px); }
+    #divider { position: fixed; top: 0; bottom: 0; left: 50vw; width: 1px; z-index: 9;
+      background: rgba(255,255,255,.25); }
+    #hud { position: fixed; left: 12px; bottom: 52px; z-index: 10; max-width: 70vw;
+      background: rgba(8,10,14,.62); padding: 8px 12px; border-radius: 10px; font-size: 12px;
+      line-height: 1.5; border: 1px solid rgba(255,255,255,.08); }
+    #stat { color: #9ad29a; }
+    #help { color: #7f8ba0; }
+    #err { color: #ff8a8a; white-space: pre-wrap; }
+    #perf { position: fixed; right: 12px; top: 12px; z-index: 10; color: var(--accent);
+      font-weight: 600; font-size: 12px; background: rgba(8,10,14,.62); padding: 6px 10px;
+      border-radius: 8px; border: 1px solid rgba(255,255,255,.08); }
+    #back { position: fixed; left: 12px; bottom: 12px; z-index: 10; text-decoration: none;
+      background: rgba(8,10,14,.72); color: #cfe0ff; padding: 8px 13px; border-radius: 8px;
+      font-size: 13px; border: 1px solid rgba(255,255,255,.10); }
+    #back:hover { background: rgba(20,26,36,.9); }
+    #drop { position: fixed; inset: 0; z-index: 20; display: none; pointer-events: none; }
+    #drop.show { display: block; }
+    #drop .half { position: absolute; top: 0; bottom: 0; width: 50%; display: flex;
+      align-items: center; justify-content: center; background: rgba(8,10,14,.5); }
+    #drop .half.hot { background: rgba(255,140,46,.18); }
+    #drop .half div { border: 2px dashed rgba(255,255,255,.4); border-radius: 14px;
+      padding: 24px 34px; font-size: 15px; color: #cfe0ff; background: rgba(8,10,14,.7); }
+    #dropL { left: 0; } #dropR { left: 50%; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/jsm/",
+      "@sparkjsdev/spark": "./vendor/spark.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="side-label" id="labL"><b>left…</b></div>
+  <div class="side-label" id="labR"><b>right…</b></div>
+  <div id="divider"></div>
+  <div id="hud">
+    <div id="stat">booting…</div>
+    <div id="help">one shared camera · drag = look · wheel = dolly · WASD = move · Q/E = down/up · shift = fast · drop a file on either half to swap that side</div>
+    <div id="err"></div>
+  </div>
+  <div id="perf">— fps</div>
+  <div id="drop">
+    <div class="half" id="dropL"><div>drop → LEFT</div></div>
+    <div class="half" id="dropR"><div>drop → RIGHT</div></div>
+  </div>
+  <a id="back" href="./index.html">← all models</a>
+  <script type="module" src="./compare.js"></script>
+</body>
+</html>

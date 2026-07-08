@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>3DGS viewer</title>
+  <style>
+    :root { --accent: #ff8c2e; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #eee; }
+    #app { position: fixed; inset: 0; touch-action: none; }
+    #app canvas { display: block; }
+    #hud { position: fixed; left: 12px; top: 12px; max-width: 66vw; z-index: 10;
+      background: rgba(8,10,14,.62); padding: 10px 13px; border-radius: 10px;
+      font-size: 12px; line-height: 1.5; backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,.08); }
+    #title { font-weight: 700; font-size: 14px; color: #fff; }
+    #sub { color: #9fb0c7; margin-top: 1px; }
+    #stat { color: #9ad29a; margin-top: 5px; }
+    #perf { position: fixed; right: 12px; top: 12px; z-index: 10; color: var(--accent);
+      font-weight: 600; font-size: 12px; background: rgba(8,10,14,.62); padding: 6px 10px;
+      border-radius: 8px; border: 1px solid rgba(255,255,255,.08); }
+    #help { margin-top: 6px; color: #7f8ba0; }
+    #err { color: #ff8a8a; white-space: pre-wrap; margin-top: 4px; }
+    #back { position: fixed; left: 12px; bottom: 12px; z-index: 10; text-decoration: none;
+      background: rgba(8,10,14,.72); color: #cfe0ff; padding: 8px 13px; border-radius: 8px;
+      font-size: 13px; border: 1px solid rgba(255,255,255,.10); }
+    #back:hover { background: rgba(20,26,36,.9); }
+    #pickrow { margin-top: 6px; }
+    #pickrow input[type=file] { display: none; }
+    #pickrow label { color: var(--accent); cursor: pointer; text-decoration: underline; }
+    #drop { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center;
+      background: rgba(8,10,14,.55); pointer-events: none; }
+    #drop.show { display: flex; }
+    #drop div { border: 2px dashed rgba(255,255,255,.4); border-radius: 16px; padding: 40px 60px;
+      font-size: 16px; color: #cfe0ff; background: rgba(8,10,14,.7); }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/jsm/",
+      "@sparkjsdev/spark": "./vendor/spark.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="hud">
+    <div id="title">loading…</div>
+    <div id="sub"></div>
+    <div id="stat">booting…</div>
+    <div id="help">drag = look · wheel = dolly · WASD = move · Q/E = down/up · shift = fast · 1-finger look / pinch dolly</div>
+    <div id="pickrow"><label>open local file… <input id="pick" type="file" accept=".sog,.spz,.splat,.ply,.ksplat,.zip" /></label></div>
+    <div id="err"></div>
+  </div>
+  <div id="perf">— fps</div>
+  <div id="drop"><div>drop a .sog / .spz / .splat / .ply file to view it</div></div>
+  <a id="back" href="./index.html">← all models</a>
+  <script type="module" src="./viewer.js"></script>
+</body>
+</html>

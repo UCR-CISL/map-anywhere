@@ -14,7 +14,7 @@
           "label": "Champion (road + COLMAP)",
           "tag": "flagship",
           "file": "riverside_champion.sog",
-          "size_mb": 29.5,
+          "size_mb": null,
           "metrics": "bg PSNR 21.58 \u00b7 depth-NCC 0.90 \u00b7 2.4M splats",
           "camera": {
             "pos": [
@@ -42,7 +42,7 @@
           "label": "Champion + 2025 finetune",
           "tag": "",
           "file": "riverside_champion_ft2025.splat",
-          "size_mb": 76.9,
+          "size_mb": null,
           "metrics": "bg PSNR 23.64 \u00b7 depth-NCC 0.93 (same frame as champion)",
           "camera": {
             "pos": [
@@ -70,7 +70,7 @@
           "label": "v2 full (all-year)",
           "tag": "",
           "file": "riverside_v2_full.splat",
-          "size_mb": 85.1,
+          "size_mb": null,
           "metrics": "full 2.4M \u00b7 GPS-scan frame",
           "camera": {
             "pos": [
@@ -98,7 +98,7 @@
           "label": "winner-D (semantic-freespace)",
           "tag": "",
           "file": "riverside_winner_d.splat",
-          "size_mb": 85.3,
+          "size_mb": null,
           "metrics": "freespace-violation 0.056 (3-seed)",
           "camera": {
             "pos": [
@@ -134,7 +134,7 @@
           "label": "Freeze + finetune",
           "tag": "flagship",
           "file": "seattle_freeze_ft.splat",
-          "size_mb": 79.1,
+          "size_mb": null,
           "metrics": "freeze-anchored finetune",
           "camera": {
             "pos": [
@@ -162,7 +162,7 @@
           "label": "Baseline (plain 3DGS)",
           "tag": "",
           "file": "seattle_baseline.splat",
-          "size_mb": 76.8,
+          "size_mb": null,
           "metrics": "canonical baseline",
           "camera": {
             "pos": [
@@ -190,7 +190,7 @@
           "label": "v4 (semantic-freespace decay)",
           "tag": "",
           "file": "seattle_v4.splat",
-          "size_mb": 74.4,
+          "size_mb": null,
           "metrics": "semfs violation 0.130 -> 0.056",
           "camera": {
             "pos": [

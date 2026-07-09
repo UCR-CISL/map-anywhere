@@ -49,6 +49,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return True
 
     def do_GET(self):
+        if self.path in ("/", "/index.htm"):
+            self.path = "/app.html"          # the multi-view app IS the UI; gallery stays at /index.html
         if not self._proxy():
             super().do_GET()
 

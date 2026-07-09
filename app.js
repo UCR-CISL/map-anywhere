@@ -13,9 +13,20 @@ import { resolveModelUrl, loadManifest, fileTypeFromName } from './config.js';
 const Q = new URLSearchParams(location.search);
 const PR = Q.has('pr') ? Number(Q.get('pr')) : Math.min(window.devicePixelRatio || 1, 2.5);
 const MAX_PANES = 4;
-// Difix3D+ live fixer (webapps/fixer-live/server.py). Override with ?fixer=<url>;
-// teammates reach the cluster GPU via `ssh -L 8750:127.0.0.1:8750 <cluster>`.
-const FIXER = (Q.get('fixer') || 'http://127.0.0.1:8750').replace(/\/$/, '');
+// Difix3D+ live fixer. Resolution order:
+//   1. ?fixer=<url>                      — explicit override
+//   2. same-origin /fixer reverse proxy  — when served via serve.py / the xylo
+//      port card (works from any laptop, no tunnel, no CORS, no mixed content)
+//   3. http://127.0.0.1:8750             — fixer-live running on this machine
+const FIXER = await (async () => {
+  if (Q.get('fixer')) return Q.get('fixer').replace(/\/$/, '');
+  try {
+    const proxied = new URL('./fixer', location).href.replace(/\/$/, '');
+    const r = await fetch(proxied + '/api/ping');
+    if (r.ok) return proxied;
+  } catch (_) { /* no proxy on this origin (e.g. GitHub Pages) */ }
+  return 'http://127.0.0.1:8750';
+})();
 
 const statEl = document.getElementById('stat'), errEl = document.getElementById('err'), perfEl = document.getElementById('perf');
 const addBtn = document.getElementById('add'), labelsEl = document.getElementById('labels');

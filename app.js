@@ -1,6 +1,6 @@
 /* Map Anywhere — 3DGS multi-view app: file browser → Load → navigate → "+ Add model"
  * splits the view; every pane is driven by ONE shared camera (spark-2up scissor
- * pattern, generalized to N columns).
+ * pattern, generalized to a grid: 1 → full, 2 → side-by-side, 3-4 → 2×2).
  *
  * Model sources per pane: manifest entry (models.json — later the data.ucr.edu
  * links), any file URL, or a local file (fileBytes, never uploaded).
@@ -72,13 +72,29 @@ function reslot() {
     if (panes[i]) sc.add(panes[i].mesh);
   });
 }
+// grid geometry: 1 pane → full, 2 → two columns, 3-4 → 2×2. Single source of
+// truth for the render tiles, the labels, the DIFIX PiPs and the DIFIX capture.
+const grid = (n) => ({ cols: n > 1 ? 2 : 1, rows: n > 2 ? 2 : 1 });
+function tileRect(i, n, w, h) {          // CSS px, y from the TOP edge
+  const { cols, rows } = grid(n);
+  const col = i % cols, row = Math.floor(i / cols);
+  const tw = Math.floor(w / cols), th = Math.floor(h / rows);
+  const x = col * tw, y = row * th;
+  return { col, row, cols, rows, x, y,
+           vw: col === cols - 1 ? w - x : tw,
+           vh: row === rows - 1 ? h - y : th };
+}
 function relayoutLabels() {
   labelsEl.innerHTML = '';
   const n = panes.length || 1;
+  const { cols, rows } = grid(n);
   panes.forEach((p, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
     const d = document.createElement('div');
     d.className = 'pane-label';
-    d.style.left = `calc(${(100 * i) / n}vw + 10px)`;
+    d.style.left = `calc(${(100 * col) / cols}vw + 10px)`;
+    d.style.top = `calc(${(100 * row) / rows}vh + 10px)`;
+    d.style.maxWidth = `calc(${100 / cols}vw - 60px)`;
     d.innerHTML = `<b title="${esc(p.label)}">${esc(p.label)}</b>` +
       `<span class="fx${p.fixOn ? ' on' : ''}" title="Toggle the Difix3D+ live PiP for this view">DIFIX</span>` +
       `<span class="x" title="Remove this view">✕</span>`;
@@ -87,7 +103,8 @@ function relayoutLabels() {
     labelsEl.appendChild(d);
     p.labelEl = d;
     if (p.pip) {   // keep the DIFIX PiP window glued to its tile's bottom-right
-      p.pip.style.left = `calc(${(100 * (i + 1)) / n}vw - 330px)`;
+      p.pip.style.left = `calc(${(100 * (col + 1)) / cols}vw - 330px)`;
+      p.pip.style.bottom = `calc(${(100 * (rows - 1 - row)) / rows}vh + ${row === rows - 1 ? 46 : 12}px)`;
     }
   });
   addBtn.disabled = panes.length >= MAX_PANES;
@@ -128,18 +145,47 @@ function removePane(pane) {
 
 // ---- Difix3D+ live fix: capture this pane's tile -> /api/fix_frame -> PiP window ----
 // Raw JPEG in/out at PiP resolution (512px wide) keeps the loop at streaming rates.
-const capCanvas = document.createElement('canvas');
+// Capture = gl.readPixels INSIDE the render loop, right after that tile is drawn
+// (mid-frame default-FBO readback is guaranteed by the WebGL spec). Both
+// drawImage(webglCanvas) and between-frame readPixels return black under
+// SwiftShader/headless and intermittently on some mobile GPUs.
+const fullCanvas = document.createElement('canvas');   // tile at device res
+const capCanvas = document.createElement('canvas');    // downscaled for the fixer
 const PIP_W = 512;
-function capturePane(i, n) {
-  const src = renderer.domElement;
+let capReq = null;                       // { i, resolve } — serviced by the render loop
+function grabTile(i, n, gl) {            // called mid-frame, tile i just rendered
   const w = container.clientWidth, h = container.clientHeight;
-  const tw = Math.floor(w / n), x = i * tw, vw = i === n - 1 ? w - x : tw;
-  const s = src.width / w;                   // CSS px -> device px
-  const cw = Math.min(PIP_W, Math.round(vw * s));
-  const ch = Math.round(cw * h / vw);
-  capCanvas.width = cw; capCanvas.height = ch;
-  capCanvas.getContext('2d').drawImage(src, x * s, 0, vw * s, h * s, 0, 0, cw, ch);
-  return new Promise((r) => capCanvas.toBlob(r, 'image/jpeg', 0.85));
+  const t = tileRect(i, n, w, h);
+  const s = gl.drawingBufferWidth / w;   // CSS px -> device px
+  const pw = Math.max(1, Math.round(t.vw * s)), ph = Math.max(1, Math.round(t.vh * s));
+  const pyGL = gl.drawingBufferHeight - Math.round(t.y * s) - ph;   // GL y is from the BOTTOM
+  const buf = new Uint8Array(pw * ph * 4);
+  gl.readPixels(Math.round(t.x * s), pyGL, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  return { buf, pw, ph };
+}
+function capturePane(i) {
+  return new Promise((resolve) => { capReq = { i, resolve }; })
+    .then((grab) => {
+      if (!grab) return null;
+      const { buf, pw, ph } = grab;
+      const img = new ImageData(pw, ph);
+      for (let r = 0; r < ph; r++) {     // flip rows (GL is bottom-up) + force opaque
+        const row = buf.subarray((ph - 1 - r) * pw * 4, (ph - r) * pw * 4);
+        for (let k = 3; k < row.length; k += 4) row[k] = 255;
+        img.data.set(row, r * pw * 4);
+      }
+      fullCanvas.width = pw; fullCanvas.height = ph;
+      fullCanvas.getContext('2d').putImageData(img, 0, 0);
+      const cw = Math.min(PIP_W, pw), ch = Math.round(cw * ph / pw);
+      capCanvas.width = cw; capCanvas.height = ch;
+      capCanvas.getContext('2d').drawImage(fullCanvas, 0, 0, pw, ph, 0, 0, cw, ch);
+      // synchronous encode: toBlob's callback can be starved for seconds when the
+      // render loop saturates the main thread; toDataURL is ~15ms at 512px
+      const bin = atob(capCanvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      const arr = new Uint8Array(bin.length);
+      for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+      return new Blob([arr], { type: 'image/jpeg' });
+    });
 }
 function ensurePip(pane) {
   if (pane.pip) return;
@@ -157,7 +203,8 @@ async function fixLoop(pane) {
   let ema = 0;
   while (pane.fixOn && panes.includes(pane)) {
     const i = panes.indexOf(pane);
-    const blob = await capturePane(i, panes.length);
+    const blob = await capturePane(i);
+    if (!blob) { await new Promise((r) => setTimeout(r, 200)); continue; }
     const t0 = performance.now();
     try {
       const r = await fetch(FIXER + '/api/fix_frame', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
@@ -166,8 +213,10 @@ async function fixLoop(pane) {
       if (!pane.fixOn || !panes.includes(pane)) break;
       ensurePip(pane);
       const old = pane.pipImg.src;
+      // revoke the PREVIOUS frame only after the new one has decoded — revoking
+      // immediately can blank the img while the new blob is still decoding
+      pane.pipImg.onload = () => { if (old.startsWith('blob:')) URL.revokeObjectURL(old); };
       pane.pipImg.src = URL.createObjectURL(out);
-      if (old.startsWith('blob:')) URL.revokeObjectURL(old);
       const ms = performance.now() - t0;
       ema = ema ? ema * 0.7 + ms * 0.3 : ms;
       pane.fixMs = Math.round(ema);
@@ -285,7 +334,7 @@ if (manifest && Q.get('load')) {
 
 updateStat();
 if (!panes.length) openPicker();
-window.__dbg = { panes, slots, cam };   // debug hook (harmless in production)
+window.__dbg = { panes, slots, cam, capturePane, get capReq() { return capReq; } };   // debug hook (harmless in production)
 
 // ---- controls (verbatim from spark-2up) ----
 function syncCamera() {
@@ -357,15 +406,22 @@ renderer.setAnimationLoop((now) => {
   renderer.setScissorTest(false);
   renderer.clear();
   if (panes.length) {
-    const n = panes.length, tw = Math.floor(w / n);
-    camera.aspect = tw / h; camera.updateProjectionMatrix();
+    const n = panes.length;
+    const t0 = tileRect(0, n, w, h);
+    camera.aspect = t0.vw / t0.vh; camera.updateProjectionMatrix();
     renderer.setScissorTest(true);
     for (let i = 0; i < n; i++) {
-      const x = i * tw, vw = i === n - 1 ? w - x : tw;
-      renderer.setViewport(x, 0, vw, h);
-      renderer.setScissor(x, 0, vw, h);
+      const t = tileRect(i, n, w, h);
+      const gy = h - t.y - t.vh;             // WebGL viewport y is from the BOTTOM edge
+      renderer.setViewport(t.x, gy, t.vw, t.vh);
+      renderer.setScissor(t.x, gy, t.vw, t.vh);
       renderer.render(slots[i], camera);
+      if (capReq && capReq.i === i) {        // DIFIX capture: read this tile back mid-frame
+        const { resolve } = capReq; capReq = null;
+        resolve(grabTile(i, n, renderer.getContext()));
+      }
     }
+    if (capReq && capReq.i >= n) { capReq.resolve(null); capReq = null; }   // pane was removed
   }
   fpsFrames++;
   if (now - fpsLast >= 500) {

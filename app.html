@@ -32,6 +32,13 @@
     .pane-label b { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pane-label .x { cursor: pointer; color: #9198a6; font-weight: 700; padding: 0 2px; }
     .pane-label .x:hover { color: #ff8a8a; }
+    .pane-label .fx { cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      color: #9198a6; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
+    .pane-label .fx:hover { color: var(--accent); border-color: var(--accent); }
+    .pane-label .fx.on { color: #0b0d11; background: var(--accent); border-color: var(--accent); }
+    .fix-overlay { position: fixed; top: 0; height: 100vh; z-index: 10; pointer-events: none; object-fit: fill;
+      transition: opacity .15s; }
+    .fix-overlay.stale { opacity: .3; }
 
     /* file browser modal */
     #picker { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center;
@@ -73,7 +80,7 @@
     <span id="stat">booting…</span>
     <span id="err"></span>
   </div>
-  <div id="help">drag = look · wheel = dolly · WASD = move · Q/E = down/up · shift = fast — one camera drives all views</div>
+  <div id="help">drag = look · wheel = dolly · WASD = move · Q/E = down/up · shift = fast — one camera drives all views · DIFIX = live Difix3D+ fix per view</div>
   <div id="perf">— fps</div>
 
   <div id="picker">

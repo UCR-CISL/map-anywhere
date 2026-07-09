@@ -13,6 +13,9 @@ import { resolveModelUrl, loadManifest, fileTypeFromName } from './config.js';
 const Q = new URLSearchParams(location.search);
 const PR = Q.has('pr') ? Number(Q.get('pr')) : Math.min(window.devicePixelRatio || 1, 2.5);
 const MAX_PANES = 4;
+// Difix3D+ live fixer (webapps/fixer-live/server.py). Override with ?fixer=<url>;
+// teammates reach the cluster GPU via `ssh -L 8750:127.0.0.1:8750 <cluster>`.
+const FIXER = (Q.get('fixer') || 'http://127.0.0.1:8750').replace(/\/$/, '');
 
 const statEl = document.getElementById('stat'), errEl = document.getElementById('err'), perfEl = document.getElementById('perf');
 const addBtn = document.getElementById('add'), labelsEl = document.getElementById('labels');
@@ -33,7 +36,7 @@ function mat3mul(A, B) { const C = new Array(9); for (let r = 0; r < 3; r++) for
 function axisAngle(a, ang) { const [x, y, z] = a, c = Math.cos(ang), s = Math.sin(ang), t = 1 - c; return [t * x * x + c, t * x * y - s * z, t * x * z + s * y, t * x * y + s * z, t * y * y + c, t * y * z - s * x, t * x * z - s * y, t * y * z + s * x, t * z * z + c]; }
 
 const container = document.getElementById('app');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });   // buffer kept readable for Difix pane capture
 renderer.setPixelRatio(PR);
 renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.autoClear = false;
@@ -65,10 +68,17 @@ function relayoutLabels() {
     const d = document.createElement('div');
     d.className = 'pane-label';
     d.style.left = `calc(${(100 * i) / n}vw + 10px)`;
-    d.innerHTML = `<b title="${esc(p.label)}">${esc(p.label)}</b><span class="x" title="Remove this view">✕</span>`;
+    d.innerHTML = `<b title="${esc(p.label)}">${esc(p.label)}</b>` +
+      `<span class="fx${p.fixOn ? ' on' : ''}" title="Toggle Difix3D+ live fix for this view">${p.fixOn ? (p.fixMs ? `DIFIX ${p.fixMs}ms` : 'DIFIX …') : 'DIFIX'}</span>` +
+      `<span class="x" title="Remove this view">✕</span>`;
+    d.querySelector('.fx').addEventListener('click', () => toggleFix(p));
     d.querySelector('.x').addEventListener('click', () => removePane(p));
     labelsEl.appendChild(d);
     p.labelEl = d;
+    if (p.overlay) {   // keep the fixed-frame overlay glued to its tile
+      p.overlay.style.left = `${(100 * i) / n}vw`;
+      p.overlay.style.width = `${100 / n}vw`;
+    }
   });
   addBtn.disabled = panes.length >= MAX_PANES;
 }
@@ -99,10 +109,62 @@ function addPane(meshOpts, label, camPreset) {
 function removePane(pane) {
   const i = panes.indexOf(pane);
   if (i < 0) return;
+  pane.fixOn = false;                        // stops its fix loop; overlay removed there
   panes.splice(i, 1);
   reslot();
   pane.mesh?.dispose?.();
   relayoutLabels(); updateStat();
+}
+
+// ---- Difix3D+ live fix: capture this pane's tile -> POST /api/fix_upload -> overlay ----
+const capCanvas = document.createElement('canvas');
+function capturePane(i, n) {
+  const src = renderer.domElement;
+  const w = container.clientWidth, h = container.clientHeight;
+  const tw = Math.floor(w / n), x = i * tw, vw = i === n - 1 ? w - x : tw;
+  const s = src.width / w;                   // CSS px -> device px
+  let cw = Math.round(vw * s), ch = Math.round(h * s);
+  if (cw > 1024) { ch = Math.round(ch * 1024 / cw); cw = 1024; }   // cap upload size
+  capCanvas.width = cw; capCanvas.height = ch;
+  capCanvas.getContext('2d').drawImage(src, x * s, 0, vw * s, h * s, 0, 0, cw, ch);
+  return new Promise((r) => capCanvas.toBlob(r, 'image/jpeg', 0.92));
+}
+async function fixLoop(pane) {
+  while (pane.fixOn && panes.includes(pane)) {
+    const i = panes.indexOf(pane);
+    const blob = await capturePane(i, panes.length);
+    const fd = new FormData();
+    fd.append('image', blob, 'view.jpg');
+    const t0 = performance.now();
+    try {
+      const r = await fetch(FIXER + '/api/fix_upload', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      if (!pane.fixOn || !panes.includes(pane)) break;
+      if (!pane.overlay) {
+        pane.overlay = document.createElement('img');
+        pane.overlay.className = 'fix-overlay';
+        document.body.appendChild(pane.overlay);
+      }
+      pane.overlay.src = j.fixed;
+      pane.overlay.classList.remove('stale');
+      pane.fixMs = Math.round(performance.now() - t0);
+      relayoutLabels();
+    } catch (e) {
+      pane.fixOn = false;
+      relayoutLabels();
+      fail(new Error(`Difix fixer unreachable at ${FIXER} (${e.message || e}) — start it with: python webapps/fixer-live/server.py --port 8750`));
+      break;
+    }
+  }
+  pane.overlay?.remove();
+  pane.overlay = null;
+}
+function toggleFix(pane) {
+  pane.fixOn = !pane.fixOn;
+  pane.fixMs = 0;
+  relayoutLabels();
+  if (pane.fixOn) fixLoop(pane).catch(fail);
 }
 
 // ---- file browser (picker modal) ----
@@ -200,8 +262,10 @@ function syncCamera() {
   camera.lookAt(cam.pos[0] + f[0], cam.pos[1] + f[1], cam.pos[2] + f[2]);
 }
 const keys = {};
+// a moving camera makes the last fixed frame stale — fade it until the next one lands
+const markOverlaysStale = () => panes.forEach((p) => p.overlay?.classList.add('stale'));
 let dragging = false, lastX = 0, lastY = 0;
-container.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+container.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; markOverlaysStale(); });
 window.addEventListener('mouseup', () => { dragging = false; });
 window.addEventListener('mousemove', (e) => {
   if (!dragging) return;
@@ -210,10 +274,11 @@ window.addEventListener('mousemove', (e) => {
 });
 container.addEventListener('wheel', (e) => {
   e.preventDefault();
+  markOverlaysStale();
   const f = camAxis(2), s = (e.deltaY < 0 ? 1 : -1) * 0.9;
   cam.pos = [cam.pos[0] + f[0] * s, cam.pos[1] + f[1] * s, cam.pos[2] + f[2] * s];
 }, { passive: false });
-window.addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') { keys[e.key.toLowerCase()] = true; markOverlaysStale(); } });
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 function stepKeys(dt) {
   const sp = (keys['shift'] ? 8 : 2.5) * dt;
@@ -224,7 +289,7 @@ function stepKeys(dt) {
 }
 let lastTouches = [];
 const snap = (tl) => [...tl].map((t) => ({ x: t.clientX, y: t.clientY }));
-container.addEventListener('touchstart', (e) => { e.preventDefault(); lastTouches = snap(e.touches); }, { passive: false });
+container.addEventListener('touchstart', (e) => { e.preventDefault(); lastTouches = snap(e.touches); markOverlaysStale(); }, { passive: false });
 container.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const cur = snap(e.touches);

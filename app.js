@@ -272,6 +272,17 @@ window.addEventListener('drop', async (e) => {
   addPane({ fileBytes: bytes, fileType: ft }, f.name, null);
 });
 
+// ---- preload: ?load=<scene>:<model>,<scene>:<model>,... fills panes at boot ----
+if (manifest && Q.get('load')) {
+  for (const tok of Q.get('load').split(',').slice(0, MAX_PANES)) {
+    const [sid, mid] = tok.split(':');
+    const sc = manifest.scenes.find((s) => s.id === sid);
+    const m = sc?.models.find((x) => x.id === mid);
+    if (m) addPane({ url: resolveModelUrl(manifest.data_base, m.file) }, m.label, m.camera);
+    else fail(new Error(`?load: no such model "${tok}"`));
+  }
+}
+
 updateStat();
 if (!panes.length) openPicker();
 window.__dbg = { panes, slots, cam };   // debug hook (harmless in production)

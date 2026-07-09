@@ -22,6 +22,9 @@ HERE = Path(__file__).resolve().parent
 FIXER_UPSTREAM = "http://127.0.0.1:8750"
 
 
+PRESET = None   # ?load= value the root URL redirects to (per-port preloaded cards)
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(HERE), **k)
@@ -50,6 +53,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ("/", "/index.htm"):
+            if PRESET:                       # preloaded card: root -> app with panes filled
+                # RELATIVE Location: behind the xylo path-prefix proxy an absolute
+                # "/app.html" would escape the prefix and 404 (white screen)
+                self.send_response(302)
+                self.send_header("Location", f"app.html?load={PRESET}")
+                self.end_headers()
+                return
             self.path = "/app.html"          # the multi-view app IS the UI; gallery stays at /index.html
         if not self._proxy():
             super().do_GET()
@@ -67,6 +77,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--preset", default="", help="?load= value the root redirects to, e.g. seattle:r1,seattle:r2")
     a = ap.parse_args()
+    PRESET = a.preset or None
     print(f"[model-browser] http://{a.host}:{a.port}/app.html  (fixer proxied at /fixer -> {FIXER_UPSTREAM})", flush=True)
     http.server.ThreadingHTTPServer((a.host, a.port), Handler).serve_forever()

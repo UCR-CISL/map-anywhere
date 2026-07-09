@@ -152,7 +152,10 @@ function removePane(pane) {
 const fullCanvas = document.createElement('canvas');   // tile at device res
 const capCanvas = document.createElement('canvas');    // downscaled for the fixer
 const PIP_W = 512;
-let capReq = null;                       // { i, resolve } — serviced by the render loop
+const capReqs = new Map();               // pane index -> resolve; serviced by the render loop.
+                                         // A Map (not a single slot) so several DIFIX PiPs can
+                                         // stream at once — a single pending slot let pane B's
+                                         // request overwrite pane A's, hanging A's loop forever.
 function grabTile(i, n, gl) {            // called mid-frame, tile i just rendered
   const w = container.clientWidth, h = container.clientHeight;
   const t = tileRect(i, n, w, h);
@@ -164,7 +167,10 @@ function grabTile(i, n, gl) {            // called mid-frame, tile i just render
   return { buf, pw, ph };
 }
 function capturePane(i) {
-  return new Promise((resolve) => { capReq = { i, resolve }; })
+  return new Promise((resolve) => {
+    capReqs.get(i)?.(null);              // supersede a stale pending request for this tile
+    capReqs.set(i, resolve);
+  })
     .then((grab) => {
       if (!grab) return null;
       const { buf, pw, ph } = grab;
@@ -334,7 +340,7 @@ if (manifest && Q.get('load')) {
 
 updateStat();
 if (!panes.length) openPicker();
-window.__dbg = { panes, slots, cam, capturePane, get capReq() { return capReq; } };   // debug hook (harmless in production)
+window.__dbg = { panes, slots, cam, capturePane, capReqs };   // debug hook (harmless in production)
 
 // ---- controls (verbatim from spark-2up) ----
 function syncCamera() {
@@ -416,12 +422,15 @@ renderer.setAnimationLoop((now) => {
       renderer.setViewport(t.x, gy, t.vw, t.vh);
       renderer.setScissor(t.x, gy, t.vw, t.vh);
       renderer.render(slots[i], camera);
-      if (capReq && capReq.i === i) {        // DIFIX capture: read this tile back mid-frame
-        const { resolve } = capReq; capReq = null;
-        resolve(grabTile(i, n, renderer.getContext()));
+      const capResolve = capReqs.get(i);     // DIFIX capture: read this tile back mid-frame
+      if (capResolve) {
+        capReqs.delete(i);
+        capResolve(grabTile(i, n, renderer.getContext()));
       }
     }
-    if (capReq && capReq.i >= n) { capReq.resolve(null); capReq = null; }   // pane was removed
+    for (const [ri, resolve] of capReqs) {   // requests for since-removed panes: resolve empty
+      if (ri >= n) { capReqs.delete(ri); resolve(null); }
+    }
   }
   fpsFrames++;
   if (now - fpsLast >= 500) {

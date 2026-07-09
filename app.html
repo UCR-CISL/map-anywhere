@@ -36,9 +36,16 @@
       color: #9198a6; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
     .pane-label .fx:hover { color: var(--accent); border-color: var(--accent); }
     .pane-label .fx.on { color: #0b0d11; background: var(--accent); border-color: var(--accent); }
-    .fix-overlay { position: fixed; top: 0; height: 100vh; z-index: 10; pointer-events: none; object-fit: fill;
-      transition: opacity .15s; }
-    .fix-overlay.stale { opacity: .3; }
+    /* DIFIX PiP — small live window pinned to its view's bottom-right corner */
+    .fix-pip { position: fixed; bottom: 46px; width: 320px; z-index: 25;
+      background: var(--panel); border: 1px solid var(--accent); border-radius: 10px;
+      overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+    .fix-pip .hdr { display: flex; justify-content: space-between; align-items: center;
+      padding: 4px 9px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+      color: var(--accent); background: rgba(8,10,14,.85); }
+    .fix-pip .hdr .close { cursor: pointer; color: #9198a6; }
+    .fix-pip .hdr .close:hover { color: #ff8a8a; }
+    .fix-pip img { display: block; width: 100%; }
 
     /* file browser modal */
     #picker { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center;

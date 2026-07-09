@@ -80,15 +80,14 @@ function relayoutLabels() {
     d.className = 'pane-label';
     d.style.left = `calc(${(100 * i) / n}vw + 10px)`;
     d.innerHTML = `<b title="${esc(p.label)}">${esc(p.label)}</b>` +
-      `<span class="fx${p.fixOn ? ' on' : ''}" title="Toggle Difix3D+ live fix for this view">${p.fixOn ? (p.fixMs ? `DIFIX ${p.fixMs}ms` : 'DIFIX …') : 'DIFIX'}</span>` +
+      `<span class="fx${p.fixOn ? ' on' : ''}" title="Toggle the Difix3D+ live PiP for this view">DIFIX</span>` +
       `<span class="x" title="Remove this view">✕</span>`;
     d.querySelector('.fx').addEventListener('click', () => toggleFix(p));
     d.querySelector('.x').addEventListener('click', () => removePane(p));
     labelsEl.appendChild(d);
     p.labelEl = d;
-    if (p.overlay) {   // keep the fixed-frame overlay glued to its tile
-      p.overlay.style.left = `${(100 * i) / n}vw`;
-      p.overlay.style.width = `${100 / n}vw`;
+    if (p.pip) {   // keep the DIFIX PiP window glued to its tile's bottom-right
+      p.pip.style.left = `calc(${(100 * (i + 1)) / n}vw - 330px)`;
     }
   });
   addBtn.disabled = panes.length >= MAX_PANES;
@@ -127,40 +126,52 @@ function removePane(pane) {
   relayoutLabels(); updateStat();
 }
 
-// ---- Difix3D+ live fix: capture this pane's tile -> POST /api/fix_upload -> overlay ----
+// ---- Difix3D+ live fix: capture this pane's tile -> /api/fix_frame -> PiP window ----
+// Raw JPEG in/out at PiP resolution (512px wide) keeps the loop at streaming rates.
 const capCanvas = document.createElement('canvas');
+const PIP_W = 512;
 function capturePane(i, n) {
   const src = renderer.domElement;
   const w = container.clientWidth, h = container.clientHeight;
   const tw = Math.floor(w / n), x = i * tw, vw = i === n - 1 ? w - x : tw;
   const s = src.width / w;                   // CSS px -> device px
-  let cw = Math.round(vw * s), ch = Math.round(h * s);
-  if (cw > 1024) { ch = Math.round(ch * 1024 / cw); cw = 1024; }   // cap upload size
+  const cw = Math.min(PIP_W, Math.round(vw * s));
+  const ch = Math.round(cw * h / vw);
   capCanvas.width = cw; capCanvas.height = ch;
   capCanvas.getContext('2d').drawImage(src, x * s, 0, vw * s, h * s, 0, 0, cw, ch);
-  return new Promise((r) => capCanvas.toBlob(r, 'image/jpeg', 0.92));
+  return new Promise((r) => capCanvas.toBlob(r, 'image/jpeg', 0.85));
+}
+function ensurePip(pane) {
+  if (pane.pip) return;
+  const d = document.createElement('div');
+  d.className = 'fix-pip';
+  d.innerHTML = '<div class="hdr"><span class="t">DIFIX …</span><span class="close">✕</span></div><img />';
+  d.querySelector('.close').addEventListener('click', () => toggleFix(pane));
+  document.body.appendChild(d);
+  pane.pip = d;
+  pane.pipHdr = d.querySelector('.t');
+  pane.pipImg = d.querySelector('img');
+  relayoutLabels();                          // positions the pip over its tile
 }
 async function fixLoop(pane) {
+  let ema = 0;
   while (pane.fixOn && panes.includes(pane)) {
     const i = panes.indexOf(pane);
     const blob = await capturePane(i, panes.length);
-    const fd = new FormData();
-    fd.append('image', blob, 'view.jpg');
     const t0 = performance.now();
     try {
-      const r = await fetch(FIXER + '/api/fix_upload', { method: 'POST', body: fd });
+      const r = await fetch(FIXER + '/api/fix_frame', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json();
+      const out = await r.blob();
       if (!pane.fixOn || !panes.includes(pane)) break;
-      if (!pane.overlay) {
-        pane.overlay = document.createElement('img');
-        pane.overlay.className = 'fix-overlay';
-        document.body.appendChild(pane.overlay);
-      }
-      pane.overlay.src = j.fixed;
-      pane.overlay.classList.remove('stale');
-      pane.fixMs = Math.round(performance.now() - t0);
-      relayoutLabels();
+      ensurePip(pane);
+      const old = pane.pipImg.src;
+      pane.pipImg.src = URL.createObjectURL(out);
+      if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+      const ms = performance.now() - t0;
+      ema = ema ? ema * 0.7 + ms * 0.3 : ms;
+      pane.fixMs = Math.round(ema);
+      pane.pipHdr.textContent = `DIFIX ${(1000 / ema).toFixed(1)} fps`;
     } catch (e) {
       pane.fixOn = false;
       relayoutLabels();
@@ -168,8 +179,8 @@ async function fixLoop(pane) {
       break;
     }
   }
-  pane.overlay?.remove();
-  pane.overlay = null;
+  pane.pip?.remove();
+  pane.pip = null;
 }
 function toggleFix(pane) {
   pane.fixOn = !pane.fixOn;
@@ -273,10 +284,8 @@ function syncCamera() {
   camera.lookAt(cam.pos[0] + f[0], cam.pos[1] + f[1], cam.pos[2] + f[2]);
 }
 const keys = {};
-// a moving camera makes the last fixed frame stale — fade it until the next one lands
-const markOverlaysStale = () => panes.forEach((p) => p.overlay?.classList.add('stale'));
 let dragging = false, lastX = 0, lastY = 0;
-container.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; markOverlaysStale(); });
+container.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
 window.addEventListener('mouseup', () => { dragging = false; });
 window.addEventListener('mousemove', (e) => {
   if (!dragging) return;
@@ -285,11 +294,10 @@ window.addEventListener('mousemove', (e) => {
 });
 container.addEventListener('wheel', (e) => {
   e.preventDefault();
-  markOverlaysStale();
   const f = camAxis(2), s = (e.deltaY < 0 ? 1 : -1) * 0.9;
   cam.pos = [cam.pos[0] + f[0] * s, cam.pos[1] + f[1] * s, cam.pos[2] + f[2] * s];
 }, { passive: false });
-window.addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') { keys[e.key.toLowerCase()] = true; markOverlaysStale(); } });
+window.addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') keys[e.key.toLowerCase()] = true; });
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 function stepKeys(dt) {
   const sp = (keys['shift'] ? 8 : 2.5) * dt;
@@ -300,7 +308,7 @@ function stepKeys(dt) {
 }
 let lastTouches = [];
 const snap = (tl) => [...tl].map((t) => ({ x: t.clientX, y: t.clientY }));
-container.addEventListener('touchstart', (e) => { e.preventDefault(); lastTouches = snap(e.touches); markOverlaysStale(); }, { passive: false });
+container.addEventListener('touchstart', (e) => { e.preventDefault(); lastTouches = snap(e.touches); }, { passive: false });
 container.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const cur = snap(e.touches);
